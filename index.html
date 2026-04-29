@@ -1,0 +1,289 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-mono, monospace); }
+  .root { padding: 1rem 0; }
+  .drop-zone {
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-background-secondary);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 1rem;
+  }
+  .drop-zone:hover { background: var(--color-background-tertiary); }
+  .drop-zone textarea {
+    width: 100%;
+    height: 120px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 0.75rem;
+    resize: vertical;
+    margin-bottom: 0.75rem;
+  }
+  .drop-zone textarea:focus { outline: none; border-color: var(--color-border-primary); }
+  .btn-row { display: flex; gap: 8px; justify-content: center; }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+  .stat-card {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+  .stat-label { font-size: 11px; color: var(--color-text-secondary); font-family: var(--font-sans); margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); font-family: var(--font-sans); }
+  .filters {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0.75rem; align-items: center;
+  }
+  .filter-label { font-size: 12px; color: var(--color-text-secondary); font-family: var(--font-sans); margin-right: 4px; }
+  .filter-btn {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    cursor: pointer; font-family: var(--font-sans); transition: all 0.1s;
+  }
+  .filter-btn.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+  .search-input {
+    margin-left: auto;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    width: 160px;
+  }
+  .search-input:focus { outline: none; border-color: var(--color-border-primary); }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .log-table th {
+    text-align: left; padding: 6px 10px; font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary); font-family: var(--font-sans);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    position: sticky; top: 0; background: var(--color-background-primary);
+  }
+  .log-table td { padding: 5px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: top; }
+  .log-table tr:hover td { background: var(--color-background-secondary); }
+  .log-wrapper { max-height: 320px; overflow-y: auto; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 500; padding: 1px 7px;
+    border-radius: 999px; font-family: var(--font-sans); white-space: nowrap;
+  }
+  .badge-emerg, .badge-alert, .badge-crit { background: #FCEBEB; color: #A32D2D; }
+  .badge-err { background: #FAECE7; color: #993C1D; }
+  .badge-warn { background: #FAEEDA; color: #854F0B; }
+  .badge-notice, .badge-info { background: #E6F1FB; color: #185FA5; }
+  .badge-debug { background: #F1EFE8; color: #5F5E5A; }
+  .ts { color: var(--color-text-secondary); font-size: 11px; white-space: nowrap; }
+  .msg { color: var(--color-text-primary); word-break: break-word; line-height: 1.4; }
+  .subsys { font-size: 11px; color: var(--color-text-tertiary); white-space: nowrap; }
+  .empty { text-align: center; padding: 2rem; color: var(--color-text-secondary); font-family: var(--font-sans); font-size: 13px; }
+  .section-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); font-family: var(--font-sans); margin-bottom: 0.5rem; }
+  @media (prefers-color-scheme: dark) {
+    .badge-emerg, .badge-alert, .badge-crit { background: #501313; color: #F7C1C1; }
+    .badge-err { background: #4A1B0C; color: #F5C4B3; }
+    .badge-warn { background: #412402; color: #FAC775; }
+    .badge-notice, .badge-info { background: #042C53; color: #B5D4F4; }
+    .badge-debug { background: #2C2C2A; color: #B4B2A9; }
+  }
+</style>
+
+<div class="root">
+  <h2 class="sr-only">Kernel ring buffer log analyzer</h2>
+
+  <div id="input-panel">
+    <div class="drop-zone">
+      <div class="section-title" style="margin-bottom: 0.5rem;">paste dmesg output</div>
+      <textarea id="log-input" placeholder="[ 0.000000] Initializing cgroup subsys cpuset&#10;[ 0.000000] Linux version 6.1.0 (gcc 12.2.0)&#10;[ 1.234567] usb 1-1: new high-speed USB device number 2&#10;[ 2.001234] EXT4-fs error (device sda1): ext4_validate_block_bitmap...&#10;[ 3.456789] WARNING: CPU: 0 PID: 1 at kernel/sched/core.c:1234"></textarea>
+      <div class="btn-row">
+        <button onclick="loadSample()">load sample logs ↗</button>
+        <button onclick="analyze()">analyze ↗</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="results-panel" style="display:none;">
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="filters" id="filters">
+      <span class="filter-label">level</span>
+    </div>
+    <div class="log-wrapper">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th style="width:90px">time (s)</th>
+            <th style="width:72px">level</th>
+            <th style="width:110px">subsystem</th>
+            <th>message</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+    <div style="margin-top: 0.75rem; text-align:right;">
+      <button onclick="reset()" style="font-size:11px;">clear &amp; reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LEVELS = {
+  0:'emerg',1:'alert',2:'crit',3:'err',4:'warn',5:'notice',6:'info',7:'debug'
+};
+const LEVEL_NAMES = ['emerg','alert','crit','err','warn','notice','info','debug'];
+
+const SAMPLE = `[    0.000000] Initializing cgroup subsys cpuset
+[    0.000000] Linux version 6.1.0-21-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14) 12.2.0)
+[    0.000000] BIOS-provided physical RAM map:
+[    0.012345] ACPI: Core revision 20220331
+[    0.234567] PCI: Using configuration type 1 for base access
+[    1.001234] usb 1-1: new high-speed USB device number 2 using xhci_hcd
+[    1.456789] usb 1-1: New USB device found, idVendor=0781, idProduct=5583
+[    2.001234] EXT4-fs error (device sda1): ext4_validate_block_bitmap:376: comm kworker/u4:3: bg 0: bad block bitmap checksum
+[    2.345678] ata1.00: exception Emask 0x10 SAct 0x0 SErr 0x4010000 action 0x6 frozen
+[    2.567890] ata1.00: SRST failed (errno=-16)
+[    3.001234] WARNING: CPU: 0 PID: 1 at kernel/sched/core.c:1234 check_preempt_curr+0x99/0xa0
+[    3.234567] iwlwifi 0000:02:00.0: Detected Intel(R) Wi-Fi 6 AX200 160MHz
+[    3.456789] iwlwifi 0000:02:00.0: loaded firmware version 59.601f3a66.0 op_mode iwlmvm
+[    4.001234] ACPI Error: Method parse/execution failed \_SB.PCI0.LPCB.EC._Q66, AE_NOT_EXIST (20220331/psparse-529)
+[    4.234567] audit: type=1400 audit(1682345678.123:45): apparmor="ALLOWED" operation="open"
+[    4.567890] systemd[1]: systemd 252 running in system mode
+[    5.001234] NET: Registered PF_INET6 protocol family
+[    5.345678] ip6_tables: (C) 2000-2006 Netfilter Core Team
+[    6.001234] usb 2-1: USB disconnect, device number 3
+[    6.234567] EXT4-fs (sda1): re-mounted. Quota mode: none.
+[    7.001234] kernel: [ 7.001] BUG: unable to handle kernel NULL pointer dereference at 0000000000000000
+[    7.234567] RIP: 0010:acpi_evaluate_object+0x12/0x80
+[    8.001234] mce: [Hardware Error]: Machine check events logged
+[    8.345678] thermal thermal_zone0: critical temperature reached (111 C), shutting down
+[    9.001234] Out of memory: Killed process 1234 (firefox) total-vm:2048kB, anon-rss:512kB
+[    9.234567] oom_reaper: reaped process 1234 (firefox), now anon-rss:0kB, file-rss:0kB`;
+
+let allEntries = [];
+let activeFilter = 'all';
+let searchTerm = '';
+
+function parseLine(line) {
+  const m = line.match(/^\[\s*([\d.]+)\]\s*(.*)/);
+  if (!m) return null;
+  const ts = parseFloat(m[1]);
+  let msg = m[2];
+  let level = 6;
+  const lvlM = msg.match(/^<(\d)>/);
+  if (lvlM) { level = parseInt(lvlM[1]); msg = msg.slice(3); }
+  else {
+    const lo = msg.toLowerCase();
+    if (/\bbug\b|null pointer|oops|panic/.test(lo)) level = 2;
+    else if (/error|failed|fault|exception/.test(lo)) level = 3;
+    else if (/warning|warn|critical temperature|mce/.test(lo)) level = 4;
+    else if (/out of memory|oom/.test(lo)) level = 3;
+    else if (/debug/.test(lo)) level = 7;
+    else if (/notice/.test(lo)) level = 5;
+  }
+  const subM = msg.match(/^([a-zA-Z0-9_\-\.]+(?:\s+\S+)??):/);
+  const subsys = subM ? subM[1].trim().split(/\s+/)[0] : '';
+  return { ts, level, subsys, msg };
+}
+
+function analyze() {
+  const raw = document.getElementById('log-input').value.trim();
+  if (!raw) return;
+  allEntries = raw.split('\n').map(parseLine).filter(Boolean);
+  activeFilter = 'all';
+  searchTerm = '';
+  renderResults();
+}
+
+function loadSample() {
+  document.getElementById('log-input').value = SAMPLE;
+  analyze();
+}
+
+function renderResults() {
+  document.getElementById('input-panel').style.display = 'none';
+  document.getElementById('results-panel').style.display = 'block';
+  renderStats();
+  renderFilters();
+  renderTable();
+}
+
+function renderStats() {
+  const counts = {total: allEntries.length, err: 0, warn: 0, info: 0, debug: 0, crit: 0};
+  allEntries.forEach(e => {
+    if (e.level <= 2) counts.crit++;
+    else if (e.level === 3) counts.err++;
+    else if (e.level === 4) counts.warn++;
+    else if (e.level <= 6) counts.info++;
+    else counts.debug++;
+  });
+  const g = document.getElementById('stats-grid');
+  g.innerHTML = [
+    ['total', counts.total],
+    ['critical', counts.crit],
+    ['errors', counts.err],
+    ['warnings', counts.warn],
+    ['info', counts.info],
+  ].map(([l,v]) => `<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+}
+
+function renderFilters() {
+  const f = document.getElementById('filters');
+  const levels = ['all', 'crit', 'err', 'warn', 'info', 'debug'];
+  f.innerHTML = `<span class="filter-label">level</span>` +
+    levels.map(l => `<button class="filter-btn ${activeFilter===l?'active':''}" onclick="setFilter('${l}')">${l}</button>`).join('') +
+    `<input class="search-input" type="text" placeholder="search..." value="${searchTerm}" oninput="setSearch(this.value)" />`;
+}
+
+function setFilter(l) { activeFilter = l; renderFilters(); renderTable(); }
+function setSearch(v) { searchTerm = v.toLowerCase(); renderTable(); }
+
+function levelGroup(lvl) {
+  if (lvl <= 2) return 'crit';
+  if (lvl === 3) return 'err';
+  if (lvl === 4) return 'warn';
+  if (lvl <= 6) return 'info';
+  return 'debug';
+}
+
+function renderTable() {
+  const filtered = allEntries.filter(e => {
+    if (activeFilter !== 'all' && levelGroup(e.level) !== activeFilter) return false;
+    if (searchTerm && !e.msg.toLowerCase().includes(searchTerm) && !e.subsys.toLowerCase().includes(searchTerm)) return false;
+    return true;
+  });
+  const body = document.getElementById('log-body');
+  if (!filtered.length) {
+    body.innerHTML = `<tr><td colspan="4" class="empty">no matching entries</td></tr>`;
+    return;
+  }
+  body.innerHTML = filtered.map(e => {
+    const lname = LEVELS[e.level] || 'info';
+    const grp = levelGroup(e.level);
+    return `<tr>
+      <td class="ts">${e.ts.toFixed(3)}</td>
+      <td><span class="badge badge-${lname}">${grp === 'crit' ? 'crit' : lname}</span></td>
+      <td class="subsys">${e.subsys || '—'}</td>
+      <td class="msg">${e.msg.replace(/</g,'&lt;')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function reset() {
+  document.getElementById('input-panel').style.display = 'block';
+  document.getElementById('results-panel').style.display = 'none';
+  document.getElementById('log-input').value = '';
+  allEntries = [];
+}
+</script>
